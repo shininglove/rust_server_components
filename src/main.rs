@@ -1,6 +1,5 @@
 // use std::path::Path;
 use std::fs;
-
 use tide::http::mime;
 use tide::utils::After;
 use tide::{log, Request, Response};
@@ -55,10 +54,27 @@ fn Image<'src>(src: &'src str) {
 async fn dirs(req: Request<()>) -> tide::Result {
     let current: String = req.session().get("dir").unwrap_or_default();
     let dir_names = fs::read_dir(current).unwrap();
-    let hiearchy: Vec<_> = dir_names
+    let folders: Vec<_> = dir_names
         .into_iter()
-        // .filter(|d| d.unwrap().metadata().unwrap().is_file())
-        .map(|d| DirItem { value: d.unwrap().path().to_str().unwrap().to_string() }).collect();
+        .filter(|d| {
+            let point = d.as_ref().unwrap();
+            let metadata = point.metadata().unwrap().is_dir();
+            let dotfiles = point
+                .path()
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with(".");
+            metadata && !dotfiles
+        })
+        .collect();
+    let hiearchy: Vec<_> = folders
+        .iter()
+        .map(|d| DirItem {
+            value: d.as_ref().unwrap().path().to_str().unwrap().to_string(),
+        })
+        .collect();
     view! {
         <section class={"p-2 inline-flex flex-wrap gap-3"}>
             {hiearchy}
