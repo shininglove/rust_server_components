@@ -1,6 +1,7 @@
-// use std::path::Path;
 use std::fs;
+use std::path::{Path, PathBuf};
 use tide::http::mime;
+use tide::prelude::*;
 use tide::utils::After;
 use tide::{log, Request, Response};
 use tide_jsx::html::HTML5Doctype;
@@ -20,7 +21,7 @@ fn SearchInput(value: String) {
     rsx! {
         <input
             type={"search"}
-            class={"p-2 border-2 border-pink-500 rounded w-1/4"}
+            class={"p-2 border-2 border-pink-500 rounded w-1/3"}
             value={value}
         />
     }
@@ -28,18 +29,36 @@ fn SearchInput(value: String) {
 
 #[component]
 fn DirItem(value: String) {
+    let vals = format!(r#"{{"destination":"{}"}}"#, value);
     rsx! {
-        <div class={"text-2xl cursor-pointer"}>
+        <div
+          class={"text-2xl cursor-pointer"}
+          hx-post={"/select_location"}
+          hx-vals={vals}
+          hx-trigger={"click"}
+          hx-swap={"none"}
+        >
         {"📂"} {value}
         </div>
     }
 }
 
 #[component]
-fn FileItem(value: String) {
+fn FileItem(value: PathBuf) {
+    let filename = value
+        .file_stem()
+        .unwrap_or_default()
+        .to_str()
+        .unwrap_or_default();
+    let extension = value
+        .extension()
+        .unwrap_or_default()
+        .to_str()
+        .unwrap_or_default();
+    let value = format!("{}.{}", filename, extension);
     rsx! {
-        <div>
-        {"📂"} {value}
+        <div class={"text-2xl cursor-pointer"}>
+        {"📀"} {value}
         </div>
     }
 }
@@ -58,7 +77,6 @@ async fn dirs(req: Request<()>) -> tide::Result {
         .into_iter()
         .filter(|d| {
             let point = d.as_ref().unwrap();
-            let metadata = point.metadata().unwrap().is_dir();
             let dotfiles = point
                 .path()
                 .file_stem()
@@ -66,19 +84,53 @@ async fn dirs(req: Request<()>) -> tide::Result {
                 .to_str()
                 .unwrap()
                 .starts_with(".");
-            metadata && !dotfiles
+            !dotfiles
         })
         .collect();
-    let hiearchy: Vec<_> = folders
+    let directories: Vec<_> = folders
         .iter()
+        .filter(|d| d.as_ref().unwrap().metadata().unwrap().is_dir())
         .map(|d| DirItem {
-            value: d.as_ref().unwrap().path().to_str().unwrap().to_string(),
+            value: d
+                .as_ref()
+                .unwrap()
+                .path()
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string(),
+        })
+        .collect();
+    let files: Vec<_> = folders
+        .iter()
+        .filter(|d| {
+            let item = d.as_ref().unwrap();
+            let metadata = item.metadata().unwrap();
+            let extension = match item.path().extension() {
+                Some(e) => match e.to_ascii_lowercase().to_str().unwrap() {
+                    "mp4" | "mov" => true,
+                    "png" | "jpg" | "jpeg" => true,
+                    _ => false,
+                },
+                None => false,
+            };
+            let is_file = metadata.is_file();
+            is_file && extension
+        })
+        .map(|d| FileItem {
+            value: d.as_ref().unwrap().path(),
         })
         .collect();
     view! {
-        <section class={"p-2 inline-flex flex-wrap gap-3"}>
-            {hiearchy}
-        </section>
+        <>
+            <section class={"p-2 inline-flex flex-wrap gap-3"}>
+                {directories}
+            </section>
+            <section class={"p-2 inline-flex flex-wrap gap-3"}>
+                {files}
+            </section>
+        </>
     }
 }
 
@@ -93,14 +145,10 @@ async fn search(req: Request<()>) -> tide::Result {
     }
 }
 
-async fn example(mut req: Request<()>) -> tide::Result {
+async fn example(_req: Request<()>) -> tide::Result {
     let actual = html! {
         <Image src={"/files/Pictures/7b7.png"}/>
     };
-    let session = req.session_mut();
-    let home_dir = std::env!("HOME").to_string();
-    let new_home = format!("{}/{}", home_dir, "Pictures");
-    session.insert("dir", new_home)?;
     Ok(Response::builder(tide::http::StatusCode::Ok)
         .content_type(tide::http::mime::HTML)
         .header("x-api-key", "pandamonium")
@@ -108,10 +156,32 @@ async fn example(mut req: Request<()>) -> tide::Result {
         .build())
 }
 
-async fn index(mut req: Request<()>) -> tide::Result {
+#[derive(Deserialize)]
+struct Location {
+    destination: String,
+}
+
+async fn update_dir_state(mut req: Request<()>) -> tide::Result {
+    let Location { destination } = req.body_form().await?;
     let session = req.session_mut();
     let home_dir = std::env!("HOME").to_string();
-    session.insert("dir", home_dir)?;
+    let base_dir = match session.get::<String>("dir") {
+        Some(d) => d,
+        None => home_dir,
+    };
+    let new_home = Path::new(base_dir.as_str()).join(destination);
+    session.insert("dir", new_home).unwrap();
+    Ok(Response::builder(tide::http::StatusCode::Ok)
+        .header("HX-Trigger-After-Settle", "refetch")
+        .build())
+}
+
+async fn index(mut req: Request<()>) -> tide::Result {
+    let session = req.session_mut();
+    if session.get::<String>("dir").is_none() {
+        let home_dir = std::env!("HOME").to_string();
+        session.insert("dir", home_dir)?;
+    }
     view! {
       <>
        <HTML5Doctype />
@@ -131,18 +201,17 @@ async fn index(mut req: Request<()>) -> tide::Result {
                 id={"search"}
                 class={"px-2 pb-2"}
                 hx-get={"/search"}
-                hx-trigger={"load"}
+                hx-trigger={"load, refetch from:body"}
                 hx-target={"#search_input"}
                 >
-                <output id={"search_input"}></output>
+                <output id={"search_input"}>{""}</output>
               </section>
               <section class={"px-2 gap-2 flex"} id={"controls"}>
                 <button
                   class={"border-2 border-purple-500 p-2 rounded text-white font-extrabold bg-purple-400"}
                   hx-get={"/test"}
                   hx-target={"#test"}>
-                      {"Toggle Move"}
-                </button>
+                      {"Toggle Move"} </button>
                 <button
                     class={"border-2 border-red-500 p-2 rounded text-white font-extrabold bg-pink-400"}
                     hx-get={"/example"}
@@ -156,16 +225,16 @@ async fn index(mut req: Request<()>) -> tide::Result {
                         {"Rename"}
                 </button>
               </section>
-              <section
+            <section id={"images"} class={"p-1"}>{""}</section>
+            <section
                 id={"files"}
                 hx-get={"/dirs"}
-                hx-swap={"outerHTML"}
-                hx-trigger={"load"}
+                hx-swap={"innerHTML"}
+                hx-trigger={"load, refetch from:body"}
                 >
-              </section>
-              <section id={"images"} class={"p-3"}>
-              </section>
-           </main>
+                {""}
+            </section>
+         </main>
         </body>
        </html>
      </>
@@ -197,6 +266,7 @@ async fn main() -> tide::Result<()> {
     app.at("/static").serve_dir("./static")?;
     app.at("/example").get(example);
     app.at("/dirs").get(dirs);
+    app.at("/select_location").post(update_dir_state);
     app.listen("0.0.0.0:5000").await?;
     Ok(())
 }
