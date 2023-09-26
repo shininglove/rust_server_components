@@ -6,7 +6,7 @@ use tide::{log, Request, Response};
 use tide::{prelude::*, Body, StatusCode};
 use tide_jsx::html::HTML5Doctype;
 use tide_jsx::{component, html, rsx, view};
-use urlencoding::decode;
+use urlencoding::{encode,decode};
 
 #[component]
 fn Heading<'title>(title: &'title str) {
@@ -66,6 +66,7 @@ fn FileItem(value: PathBuf) {
         "png" | "jpg" | "jpeg" => "📷",
         _ => "❓",
     };
+    let path = encode(&path);
     let vals = format!(r#"{{"destination":"{}"}}"#, path);
     rsx! {
         <div
@@ -244,8 +245,9 @@ struct Location {
 async fn showing(mut req: Request<()>) -> tide::Result {
     let home_dir = std::env!("HOME").to_string();
     let Location { destination } = req.body_form().await?;
+    let dest = decode(&destination)?;
     let session = req.session_mut();
-    let base_file = destination.replace(&home_dir, "/files");
+    let base_file = dest.to_string().replace(&home_dir, "/files");
     let source = match Path::new(destination.as_str())
         .extension()
         .unwrap_or_default()
@@ -287,20 +289,24 @@ async fn update_dir_state(mut req: Request<()>) -> tide::Result {
 
 async fn move_file(mut req: Request<()>) -> tide::Result {
     let Location { destination } = req.body_form().await?;
+    let destination = decode(&destination)?.to_string();
     let session = req.session_mut();
     let home_dir = std::env!("HOME");
     let file_path = session.get::<String>("showcase").unwrap_or("".to_string());
     if file_path.is_empty() || home_dir.is_empty() {
         return Ok(Response::builder(StatusCode::NotFound).build());
     };
+    let file_path = decode(&file_path)?.to_string();
     let filename = Path::new(&file_path).file_name().unwrap().to_str().unwrap();
     let dir_path = match session.get::<String>("dir") {
-        Some(d) => Path::new(&d)
+        Some(d) => {
+            let d = decode(&d).unwrap().to_string();
+            Path::new(&d)
             .join(destination)
             .join(filename)
             .to_str()
             .unwrap()
-            .to_string(),
+            .to_string()},
         None => home_dir.to_string(),
     };
     fs::rename(file_path, dir_path)?;
