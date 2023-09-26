@@ -287,7 +287,7 @@ pub async fn index(mut req: Request<()>) -> tide::Result {
             <main>
               <section
                 id={"search"}
-                class={"px-2 pb-2"}
+                class={"px-2 pb-1"}
                 hx-get={"/search"}
                 hx-trigger={"load, refetch from:body"}
                 hx-target={"#search_input"}
@@ -303,7 +303,7 @@ pub async fn index(mut req: Request<()>) -> tide::Result {
                 >
                 <output id={"update_input"}>{""}</output>
               </section>
-              <section id={"images"} class={"p-1"}>{""}</section>
+              <section id={"images"} class={"p-2"}>{""}</section>
               <section class={"px-2 gap-2 flex"} id={"controls"}>
                <button
                     id={"create"}

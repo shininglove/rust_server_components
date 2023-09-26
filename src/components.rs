@@ -79,15 +79,15 @@ pub fn FileItem(value: PathBuf) {
 #[component]
 pub fn Image<'src>(src: &'src str) {
     rsx! {
-        <img class={"pt-2 w-48 h-48"} src={src} alt={"server-image"}/>
+        <img class={"pt-2 w-full h-48"} src={src} alt={"server-image"}/>
     }
 }
 
 #[component]
 pub fn Video<'src>(src: &'src str, size: &'src str) {
     rsx! {
-    <video controls={"true"} width={size} height={size}>
-        <source src={src}></source>
+    <video controls={"true"} class={"w-1/3"}>
+        <source src={src}>{size}</source>
     </video>
     }
 }
