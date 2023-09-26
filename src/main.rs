@@ -32,47 +32,17 @@ fn SearchInput(value: String) {
 }
 
 #[component]
-fn DirItem(value: PathBuf, parent: bool, move_mode: Option<String>) {
-    let path = if !parent {
-        value
-            .file_stem()
-            .unwrap_or_default()
-            .to_str()
-            .unwrap_or_default()
-    } else {
-        value.to_str().unwrap_or_default()
-    };
-    let vals = format!(r#"{{"destination":"{}"}}"#, path);
-    let destination = match parent {
-        true => "..".to_string(),
-        false => path.to_string(),
-    };
-    if let Some(move_dir) = move_mode {
-        let vals = format!(r#"{{"destination":"{}"}}"#, move_dir);
-        rsx! {
-            <div
-              class={"text-2xl cursor-pointer"}
-              hx-post={"/movefile"}
-              hx-vals={vals}
-              hx-trigger={"click"}
-              hx-target={"#images"}
-              hx-swap={"innerHTML"}
-            >
-            {"↪️ "} {destination}
-            </div>
-        }
-    } else {
-        rsx! {
-            <div
-              class={"text-2xl cursor-pointer"}
-              hx-post={"/select_location"}
-              hx-vals={vals}
-              hx-trigger={"click"}
-              hx-swap={"none"}
-            >
-            {"📂"} {destination}
-            </div>
-        }
+fn CreateFolderInput() {
+    rsx! {
+        <input
+            type={"search"}
+            name={"folder_name"}
+            class={"p-2 border-2 border-purple-500 rounded w-1/3"}
+            placeholder={"Create new folder"}
+            hx-post={"/create_folder"}
+            hx-trigger={"click from:#create"}
+            hx-swap={"none"}
+        />
     }
 }
 
@@ -127,9 +97,53 @@ fn Video<'src>(src: &'src str, size: &'src str) {
     }
 }
 
+#[component]
+fn DirItem(value: PathBuf, parent: bool, move_mode: bool) {
+    let path = if !parent {
+        value
+            .file_stem()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or_default()
+    } else {
+        value.to_str().unwrap_or_default()
+    };
+    let vals = format!(r#"{{"destination":"{}"}}"#, path);
+    let destination = match parent {
+        true => "..".to_string(),
+        false => path.to_string(),
+    };
+    if move_mode {
+        rsx! {
+            <div
+              class={"text-2xl cursor-pointer"}
+              hx-post={"/movefile"}
+              hx-vals={vals}
+              hx-trigger={"click"}
+              hx-target={"#images"}
+              hx-swap={"innerHTML"}
+            >
+            {"↪️ "} {destination}
+            </div>
+        }
+    } else {
+        rsx! {
+            <div
+              class={"text-2xl cursor-pointer"}
+              hx-post={"/select_location"}
+              hx-vals={vals}
+              hx-trigger={"click"}
+              hx-swap={"none"}
+            >
+            {"📂"} {destination}
+            </div>
+        }
+    }
+}
+
 async fn dirs(req: Request<()>) -> tide::Result {
     let current: String = req.session().get("dir").unwrap_or_default();
-    let showcase: Option<String> = req.session().get("showcase");
+    let move_mode: bool = req.session().get("movemode").unwrap_or(false);
     let dir_names = fs::read_dir(&current).unwrap();
     let folders: Vec<_> = dir_names
         .into_iter()
@@ -145,18 +159,13 @@ async fn dirs(req: Request<()>) -> tide::Result {
             !dotfiles
         })
         .collect();
-    let move_dir = if let Some(_) = showcase {
-        showcase
-    } else {
-        None
-    };
     let mut directories: Vec<_> = folders
         .iter()
         .filter(|d| d.as_ref().unwrap().metadata().unwrap().is_dir())
         .map(|d| DirItem {
             value: d.as_ref().unwrap().path(),
             parent: false,
-            move_mode: move_dir.clone()
+            move_mode,
         })
         .collect();
     let path = Path::new(current.as_str());
@@ -167,7 +176,7 @@ async fn dirs(req: Request<()>) -> tide::Result {
     let parent = DirItem {
         value: base_path.to_path_buf(),
         parent: true,
-        move_mode: None
+        move_mode: false,
     };
     directories.splice(0..0, vec![parent]);
     let files: Vec<_> = folders
@@ -209,6 +218,12 @@ async fn search(req: Request<()>) -> tide::Result {
     };
     view! {
         <SearchInput value={session}/>
+    }
+}
+
+async fn get_folder_create(_req: Request<()>) -> tide::Result {
+    view! {
+        <CreateFolderInput/>
     }
 }
 
@@ -261,37 +276,26 @@ async fn update_dir_state(mut req: Request<()>) -> tide::Result {
         .build())
 }
 
-async fn move_file(req: Request<()>) -> tide::Result {
-    let session = req.session();
+async fn move_file(mut req: Request<()>) -> tide::Result {
+    let Location { destination } = req.body_form().await?;
+    let session = req.session_mut();
     let home_dir = std::env!("HOME");
-    let file_path = match session.get::<String>("showcase") {
-        Some(d) => d,
-        None => "".to_string(),
-    };
+    let file_path = session.get::<String>("showcase").unwrap_or("".to_string());
     if file_path.is_empty() || home_dir.is_empty() {
         return Ok(Response::builder(StatusCode::NotFound).build());
     };
-    let filename = Path::new(&file_path)
-        .file_stem()
-        .unwrap_or_default()
-        .to_str()
-        .unwrap_or_default();
-    let extension = Path::new(&file_path)
-        .extension()
-        .unwrap_or_default()
-        .to_str()
-        .unwrap_or_default();
+    let filename = Path::new(&file_path).file_name().unwrap().to_str().unwrap();
     let dir_path = match session.get::<String>("dir") {
         Some(d) => Path::new(&d)
-            .join(format!("{}.{}", filename, extension))
+            .join(destination)
+            .join(filename)
             .to_str()
             .unwrap()
             .to_string(),
         None => home_dir.to_string(),
     };
-    dbg!(file_path);
-    dbg!(dir_path);
-    // fs::rename(file_path, dir_path)?;
+    fs::rename(file_path, dir_path)?;
+    session.insert("showcase", "")?;
     Ok(Response::builder(tide::http::StatusCode::Ok)
         .header("HX-Trigger-After-Settle", "refetch")
         .body("")
@@ -300,15 +304,36 @@ async fn move_file(req: Request<()>) -> tide::Result {
 
 async fn toggle_move(mut req: Request<()>) -> tide::Result {
     let session = req.session_mut();
-    let move_mode = match session.get::<bool>("movemode") {
-        Some(mode) => mode,
-        None => false,
-    };
+    let move_mode = session.get::<bool>("movemode").unwrap_or(false);
     session.insert("movemode", !move_mode)?;
     Ok(Response::builder(tide::http::StatusCode::Ok)
         .header("HX-Trigger-After-Settle", "refetch")
         .build())
 }
+
+#[derive(Deserialize)]
+struct Directory {
+    folder_name: String,
+}
+
+async fn create_directory(mut req: Request<()>) -> tide::Result {
+    let Directory { folder_name } = req.body_form().await?;
+    let session = req.session();
+    let home_dir = std::env!("HOME").to_string();
+    let base_dir = match session.get::<String>("dir") {
+        Some(d) => d,
+        None => home_dir,
+    };
+    let new_directory = Path::new(base_dir.as_str()).join(folder_name);
+    if !new_directory.exists() {
+       fs::create_dir_all(new_directory)?;
+    }
+    Ok(Response::builder(tide::http::StatusCode::Ok)
+        .header("HX-Trigger-After-Settle", "refetch")
+        .build())
+}
+
+
 
 async fn index(mut req: Request<()>) -> tide::Result {
     let session = req.session_mut();
@@ -341,6 +366,15 @@ async fn index(mut req: Request<()>) -> tide::Result {
                 >
                 <output id={"search_input"}>{""}</output>
               </section>
+              <section
+                id={"create_folder"}
+                class={"px-2 pb-2"}
+                hx-get={"/get_create_input"}
+                hx-trigger={"click from:#create once"}
+                hx-target={"#create_input"}
+                >
+                <output id={"create_input"}>{""}</output>
+              </section>
               <section id={"images"} class={"p-1"}>{""}</section>
               <section class={"px-2 gap-2 flex"} id={"controls"}>
                 <button
@@ -350,10 +384,10 @@ async fn index(mut req: Request<()>) -> tide::Result {
                   >
                       {"Toggle Move"} </button>
                 <button
+                    id={"create"}
                     class={"border-2 border-red-500 p-2 rounded text-white font-extrabold bg-pink-400"}
-                    hx-get={"/example"}
-                    hx-target={"#images"}>
-                        {"Download"}
+                    >
+                        {"Create Folder"}
                 </button>
                 <button
                     class={"border-2 border-lime-500 p-2 rounded text-white font-extrabold bg-lime-400"}
@@ -414,6 +448,8 @@ async fn main() -> tide::Result<()> {
     app.at("/togglemove").post(toggle_move);
     app.at("/movefile").post(move_file);
     app.at("/example").get(example);
+    app.at("/get_create_input").get(get_folder_create);
+    app.at("/create_folder").post(create_directory);
     app.at("/show").post(showing);
     app.at("/dirs").get(dirs);
     app.at("/select_location").post(update_dir_state);
