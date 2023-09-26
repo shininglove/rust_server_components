@@ -6,7 +6,7 @@ use tide::{log, Request, Response};
 use tide::{prelude::*, Body, StatusCode};
 use tide_jsx::html::HTML5Doctype;
 use tide_jsx::{component, html, rsx, view};
-use urlencoding::decode;
+use urlencoding::{decode, encode};
 
 #[component]
 fn Heading<'title>(title: &'title str) {
@@ -66,6 +66,7 @@ fn FileItem(value: PathBuf) {
         "png" | "jpg" | "jpeg" => "📷",
         _ => "❓",
     };
+    let path = encode(&path); //windows support
     let vals = format!(r#"{{"destination":"{}"}}"#, path);
     rsx! {
         <div
@@ -108,6 +109,7 @@ fn DirItem(value: PathBuf, parent: bool, move_mode: bool) {
     } else {
         value.to_str().unwrap_or_default()
     };
+    let path = encode(&path);
     let vals = format!(r#"{{"destination":"{}"}}"#, path);
     let destination = match parent {
         true => "..".to_string(),
@@ -244,8 +246,9 @@ struct Location {
 async fn showing(mut req: Request<()>) -> tide::Result {
     let home_dir = std::env!("HOME").to_string();
     let Location { destination } = req.body_form().await?;
+    let dest = decode(&destination)?; //windows support
     let session = req.session_mut();
-    let base_file = destination.replace(&home_dir, "/files");
+    let base_file = dest.replace(&home_dir, "/files");
     let source = match Path::new(destination.as_str())
         .extension()
         .unwrap_or_default()
@@ -272,6 +275,7 @@ async fn example(_req: Request<()>) -> tide::Result {
 
 async fn update_dir_state(mut req: Request<()>) -> tide::Result {
     let Location { destination } = req.body_form().await?;
+    let destination = decode(&destination)?.to_string();
     let session = req.session_mut();
     let home_dir = std::env!("HOME").to_string();
     let base_dir = match session.get::<String>("dir") {
@@ -287,9 +291,11 @@ async fn update_dir_state(mut req: Request<()>) -> tide::Result {
 
 async fn move_file(mut req: Request<()>) -> tide::Result {
     let Location { destination } = req.body_form().await?;
+    let destination = decode(&destination)?.to_string();
     let session = req.session_mut();
     let home_dir = std::env!("HOME");
     let file_path = session.get::<String>("showcase").unwrap_or("".to_string());
+    let file_path = decode(&file_path)?.to_string();
     if file_path.is_empty() || home_dir.is_empty() {
         return Ok(Response::builder(StatusCode::NotFound).build());
     };
