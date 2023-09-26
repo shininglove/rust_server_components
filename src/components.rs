@@ -25,6 +25,7 @@ pub fn SearchInput(value: String) {
     }
 }
 
+
 #[component]
 pub fn CreateFolderInput() {
     rsx! {

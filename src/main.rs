@@ -1,6 +1,6 @@
 use rusthtmx::routes::{
-    create_directory, dirs, example, get_folder_create, index, move_file, search, showing,
-    toggle_move, update_dir_state,
+    create_directory, dirs, get_folder_create, index, move_file, search, showing,
+    toggle_move, update_dir_state, getrenameinput, outputdir, renamefile
 };
 use tide::http::mime;
 use tide::utils::After;
@@ -41,12 +41,15 @@ async fn main() -> tide::Result<()> {
         }
     });
     app.at("/static").serve_dir("./static")?;
-    app.at("/example").get(example);
     app.at("/togglemove").post(toggle_move);
     app.at("/movefile").post(move_file);
     app.at("/get_create_input").get(get_folder_create);
     app.at("/create_folder").post(create_directory);
     app.at("/show").post(showing);
+    app.at("/get_rename_input").get(getrenameinput);
+    app.at("/output_dir").get(outputdir);
+    app.at("/show").post(showing);
+    app.at("/rename_file").post(renamefile);
     app.at("/dirs").get(dirs);
     app.at("/select_location").post(update_dir_state);
     app.listen("0.0.0.0:5000").await?;

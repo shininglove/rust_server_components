@@ -119,22 +119,72 @@ pub async fn showing(mut req: Request<()>) -> tide::Result {
         .to_str()
         .unwrap_or_default()
     {
-        "mp4" | "mov" => view! {  <Video src={base_file.as_str()} size={"400"}/> },
-        _ => view! {<Image src={base_file.as_str()}/>},
+        "mp4" | "mov" => html! {  <Video src={base_file.as_str()} size={"400"}/> },
+        _ => html! {<Image src={base_file.as_str()}/>},
     };
     session.insert("showcase", destination)?;
-    source
-}
-
-pub async fn example(_req: Request<()>) -> tide::Result {
-    let actual = html! {
-        <Image src={"/files/Pictures/7b7.png"}/>
-    };
     Ok(Response::builder(tide::http::StatusCode::Ok)
         .content_type(tide::http::mime::HTML)
-        .header("x-api-key", "pandamonium")
-        .body(actual)
+        .header("HX-Trigger-After-Settle", "fetchrename")
+        .body(source)
         .build())
+}
+
+pub async fn getrenameinput(req: Request<()>) -> tide::Result {
+    let session = req.session();
+    let showcase: String = session.get("showcase").unwrap_or("".to_string());
+    let showcase = decode(&showcase)?.to_string();
+    view! {
+        <input
+            type={"search"}
+            name={"destination"}
+            class={"p-2 border-2 border-lime-500 rounded w-1/3"}
+            hx-post={"/rename_file"}
+            hx-trigger={"click from:#rename"}
+            hx-target={"#images"}
+            placeholder={"Rename current file..."}
+            value={showcase}
+        />
+    }
+}
+
+pub async fn renamefile(mut req: Request<()>) -> tide::Result {
+    let Location { destination } = req.body_form().await?;
+    let destination = decode(&destination)?.to_string();
+    let session = req.session_mut();
+    let home_dir = std::env!("HOME").to_string();
+    let showcase: String = session.get("showcase").unwrap_or("".to_string());
+    let showcase = decode(&showcase)?.to_string();
+    if destination.is_empty() {
+        return Ok(Response::builder(StatusCode::NotFound).build());
+    }
+    let dir_path = match session.get::<String>("dir") {
+        Some(d) => Path::new(&d)
+            .join(destination)
+            .to_str()
+            .unwrap()
+            .to_string(),
+        None => home_dir.to_string(),
+    };
+    fs::rename(showcase, dir_path)?;
+    Ok(Response::builder(tide::http::StatusCode::Ok)
+        .header("HX-Trigger-After-Settle", "refetch")
+        .body("")
+        .build())
+}
+
+pub async fn outputdir(_req: Request<()>) -> tide::Result {
+    view! {
+        <output
+          hx-get={"/get_rename_input"}
+          id={"update_input"}
+          hx-trigger={"load once, fetchrename from:body"}
+          hx-swap={"innerHTML"}
+        >
+            {""}
+        </output>
+
+    }
 }
 
 pub async fn update_dir_state(mut req: Request<()>) -> tide::Result {
@@ -254,13 +304,7 @@ pub async fn index(mut req: Request<()>) -> tide::Result {
               </section>
               <section id={"images"} class={"p-1"}>{""}</section>
               <section class={"px-2 gap-2 flex"} id={"controls"}>
-                <button
-                  hx-post={"/togglemove"}
-                  hx-swap={"none"}
-                  class={"border-2 border-purple-500 p-2 rounded text-white font-extrabold bg-purple-400"}
-                  >
-                      {"Toggle Move"} </button>
-                <button
+               <button
                     id={"create"}
                     class={"border-2 border-red-500 p-2 rounded text-white font-extrabold bg-pink-400"}
                     >
@@ -271,6 +315,22 @@ pub async fn index(mut req: Request<()>) -> tide::Result {
                     id={"update"}
                     >
                         {"Update"}
+                </button>
+                <button
+                    class={"border-2 border-sky-500 p-2 rounded text-white font-extrabold bg-sky-400"}
+                    id={"rename"}
+                    hx-get={"/output_dir"}
+                    hx-target={"#create_folder"}
+                    hx-trigger={"click once"}
+                    >
+                        {"Rename"}
+                </button>
+                <button
+                  hx-post={"/togglemove"}
+                  hx-swap={"none"}
+                  class={"border-2 border-purple-500 p-2 rounded text-white font-extrabold bg-purple-400"}
+                  >
+                  {"Toggle Move"}
                 </button>
               </section>
             <section
