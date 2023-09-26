@@ -159,9 +159,14 @@ async fn dirs(req: Request<()>) -> tide::Result {
             !dotfiles
         })
         .collect();
-    let mut directories: Vec<_> = folders
+    let mut dirs: Vec<_> = folders
         .iter()
         .filter(|d| d.as_ref().unwrap().metadata().unwrap().is_dir())
+        .collect();
+    dirs.sort_by_key(|x| x.as_ref().unwrap().metadata().unwrap().modified().unwrap());
+    dirs.reverse();
+    let mut directories: Vec<_> = dirs
+        .iter()
         .map(|d| DirItem {
             value: d.as_ref().unwrap().path(),
             parent: false,
@@ -179,7 +184,7 @@ async fn dirs(req: Request<()>) -> tide::Result {
         move_mode: false,
     };
     directories.splice(0..0, vec![parent]);
-    let files: Vec<_> = folders
+    let mut files: Vec<_> = folders
         .iter()
         .filter(|d| {
             let item = d.as_ref().unwrap();
@@ -194,6 +199,10 @@ async fn dirs(req: Request<()>) -> tide::Result {
             let is_file = metadata.is_file();
             is_file && extension
         })
+        .collect();
+    files.sort_by_key(|f| f.as_ref().unwrap().metadata().unwrap().len());
+    let file_items: Vec<_> = files
+        .iter()
         .map(|d| FileItem {
             value: d.as_ref().unwrap().path(),
         })
@@ -204,7 +213,7 @@ async fn dirs(req: Request<()>) -> tide::Result {
                 {directories}
             </section>
             <section class={"p-2 inline-flex flex-wrap gap-3"}>
-                {files}
+                {file_items}
             </section>
         </>
     }
@@ -326,14 +335,12 @@ async fn create_directory(mut req: Request<()>) -> tide::Result {
     };
     let new_directory = Path::new(base_dir.as_str()).join(folder_name);
     if !new_directory.exists() {
-       fs::create_dir_all(new_directory)?;
+        fs::create_dir_all(new_directory)?;
     }
     Ok(Response::builder(tide::http::StatusCode::Ok)
         .header("HX-Trigger-After-Settle", "refetch")
         .build())
 }
-
-
 
 async fn index(mut req: Request<()>) -> tide::Result {
     let session = req.session_mut();
