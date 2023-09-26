@@ -166,7 +166,8 @@ pub async fn renamefile(mut req: Request<()>) -> tide::Result {
             .to_string(),
         None => home_dir.to_string(),
     };
-    fs::rename(showcase, dir_path)?;
+    fs::rename(showcase, &dir_path)?;
+    session.insert("showcase", dir_path)?;
     Ok(Response::builder(tide::http::StatusCode::Ok)
         .header("HX-Trigger-After-Settle", "refetch")
         .body("")
@@ -223,8 +224,8 @@ pub async fn move_file(mut req: Request<()>) -> tide::Result {
             .to_string(),
         None => home_dir.to_string(),
     };
-    fs::rename(file_path, dir_path)?;
-    session.insert("showcase", "")?;
+    fs::rename(file_path, &dir_path)?;
+    session.insert("showcase", dir_path)?;
     Ok(Response::builder(tide::http::StatusCode::Ok)
         .header("HX-Trigger-After-Settle", "refetch")
         .body("")

@@ -1,6 +1,6 @@
 use rusthtmx::routes::{
-    create_directory, dirs, get_folder_create, index, move_file, search, showing,
-    toggle_move, update_dir_state, getrenameinput, outputdir, renamefile
+    create_directory, dirs, get_folder_create, getrenameinput, index, move_file, outputdir,
+    renamefile, search, showing, toggle_move, update_dir_state,
 };
 use tide::http::mime;
 use tide::utils::After;

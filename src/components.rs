@@ -1,5 +1,5 @@
-use tide_jsx::{component, rsx};
 use std::path::PathBuf;
+use tide_jsx::{component, rsx};
 use urlencoding::encode;
 
 #[component]
@@ -24,7 +24,6 @@ pub fn SearchInput(value: String) {
         />
     }
 }
-
 
 #[component]
 pub fn CreateFolderInput() {
