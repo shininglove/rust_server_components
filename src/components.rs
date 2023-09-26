@@ -35,7 +35,7 @@ pub fn CreateFolderInput() {
             class={"p-2 border-2 border-purple-500 rounded w-1/3"}
             placeholder={"Create new folder"}
             hx-post={"/create_folder"}
-            hx-trigger={"click from:#create"}
+            hx-trigger={"click from:#create, keydown[key=='Enter']"}
             hx-swap={"none"}
         />
     }

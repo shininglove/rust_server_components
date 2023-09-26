@@ -140,7 +140,7 @@ pub async fn getrenameinput(req: Request<()>) -> tide::Result {
             name={"destination"}
             class={"p-2 border-2 border-lime-500 rounded w-1/3"}
             hx-post={"/rename_file"}
-            hx-trigger={"click from:#rename"}
+            hx-trigger={"click from:#rename, keydown[key=='Enter']"}
             hx-target={"#images"}
             placeholder={"Rename current file..."}
             value={showcase}
@@ -274,7 +274,7 @@ pub async fn index(mut req: Request<()>) -> tide::Result {
        <html>
          <head>
             <title>{"Tide JSX"}</title>
-             <script src={"https://unpkg.com/htmx.org@1.9.5"}>{""}</script>
+             <script src={"https://unpkg.com/htmx.org@1.9.6"}>{""}</script>
             <link rel={"stylesheet"} href={"/static/output.css"} />
             <link rel={"stylesheet"} href={"/static/video-js.css"} />
             <link rel={"icon"} href={"/static/favicon.ico"} />
