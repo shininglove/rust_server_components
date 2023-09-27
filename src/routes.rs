@@ -164,7 +164,11 @@ pub async fn renamefile(mut req: Request<()>) -> tide::Result {
             .to_str()
             .unwrap()
             .to_string(),
-        None => home_dir.to_string(),
+        None => Path::new(&home_dir)
+            .join(destination)
+            .to_str()
+            .unwrap()
+            .to_string(),
     };
     fs::rename(showcase, &dir_path)?;
     session.insert("showcase", dir_path)?;
@@ -222,7 +226,11 @@ pub async fn move_file(mut req: Request<()>) -> tide::Result {
             .to_str()
             .unwrap()
             .to_string(),
-        None => home_dir.to_string(),
+        None => Path::new(home_dir)
+            .join(&file_path)
+            .to_str()
+            .unwrap()
+            .to_string(),
     };
     fs::rename(file_path, &dir_path)?;
     session.insert("showcase", dir_path)?;

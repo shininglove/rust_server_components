@@ -79,7 +79,7 @@ pub fn FileItem(value: PathBuf) {
 #[component]
 pub fn Image<'src>(src: &'src str) {
     rsx! {
-        <img class={"pt-2 w-full h-48"} src={src} alt={"server-image"}/>
+        <img class={"pt-2 w-1/3 h-48"} src={src} alt={"server-image"}/>
     }
 }
 
