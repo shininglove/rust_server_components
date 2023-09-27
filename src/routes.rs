@@ -112,7 +112,11 @@ pub async fn showing(mut req: Request<()>) -> tide::Result {
     let Location { destination } = req.body_form().await?;
     let dest = decode(&destination)?; //windows support
     let session = req.session_mut();
-    let base_file = dest.replace(&home_dir, "/files");
+    let base_dir = match session.get::<String>("dir") {
+       Some(d) => d,
+       None => home_dir
+    };
+    let base_file = dest.replace(&base_dir, "/files");
     let source = match Path::new(destination.as_str())
         .extension()
         .unwrap_or_default()

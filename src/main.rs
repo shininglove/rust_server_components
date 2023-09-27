@@ -29,11 +29,16 @@ async fn main() -> tide::Result<()> {
     app.at("/").get(index);
     app.at("/search").get(search);
     app.at("/files/*").get(|req: Request<()>| async move {
+        let session = req.session();
         let home_dir = std::env!("HOME");
         let path = req.url().path();
         let file_location = decode(path)?;
         let dir = file_location.to_string();
-        let file_dir = dir.replace("/files", home_dir);
+        let base_dir = match session.get::<String>("dir") {
+           Some(d) => d,
+           None => home_dir.to_string()
+        };
+        let file_dir = dir.replace("/files", &base_dir);
         if let Ok(body) = Body::from_file(file_dir).await {
             Ok(body.into())
         } else {
