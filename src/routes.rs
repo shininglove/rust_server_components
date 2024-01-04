@@ -289,7 +289,6 @@ pub async fn index(mut req: Request<()>) -> tide::Result {
             <title>{"Tide JSX"}</title>
              <script src={"https://unpkg.com/htmx.org@1.9.6"}>{""}</script>
             <link rel={"stylesheet"} href={"/static/output.css"} />
-            <link rel={"stylesheet"} href={"/static/video-js.css"} />
             <link rel={"icon"} href={"/static/favicon.ico"} />
         </head>
          <body>
